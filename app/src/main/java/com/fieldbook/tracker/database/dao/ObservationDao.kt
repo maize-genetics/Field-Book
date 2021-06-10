@@ -252,6 +252,28 @@ class ObservationDao {
 
         } ?: -1
 
+        fun insertObservation(expId:Int, model: BrapiObservation): Int = withDatabase { db ->
+
+            db.insert(Observation.tableName, null, contentValuesOf(
+                "observation_variable_name" to model.variableName,
+//                "observation_variable_field_book_format" to model.observation_variable_field_book_format,
+                "observation_variable_field_book_format" to null,
+                "value" to model.value,
+                "observation_time_stamp" to model.timestamp,
+                "collector" to model.collector,
+//                "geoCoordinates" to model.geo_coordinates,
+                "geoCoordinates" to null,
+                "last_synced_time" to model.lastSyncedTime,
+//                "additional_info" to model.additional_info,
+                "additional_info" to null,
+//                Study.FK to model.studyId,
+                Study.FK to expId,
+                ObservationUnit.FK to model.unitDbId,
+                ObservationVariable.FK to model.variableDbId
+            )).toInt()
+
+        } ?: -1
+
         /**
          * Should trait be observation_field_book_format?
          */

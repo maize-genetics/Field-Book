@@ -16,11 +16,13 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.arch.core.util.Function;
 
 import com.fieldbook.tracker.R;
+import com.fieldbook.tracker.brapi.model.Observation;
 import com.fieldbook.tracker.brapi.service.BrAPIService;
 import com.fieldbook.tracker.brapi.service.BrAPIServiceFactory;
 import com.fieldbook.tracker.brapi.BrapiLoadDialog;
 import com.fieldbook.tracker.brapi.service.BrapiPaginationManager;
 import com.fieldbook.tracker.brapi.model.BrapiStudyDetails;
+import com.fieldbook.tracker.objects.TraitObject;
 import com.fieldbook.tracker.utilities.Utils;
 
 import java.util.ArrayList;
@@ -193,12 +195,19 @@ public class BrapiActivity extends AppCompatActivity {
 
     private void saveStudy() {
         if(this.selectedStudy != null) {
+
+//            loadObservations();
+//            System.out.println("Size:");
+//            System.out.println(this.selectedStudy.getObservations().size());
             brapiLoadDialog.setSelectedStudy(this.selectedStudy);
+            brapiLoadDialog.setPaginationManager(this.paginationManager);
             brapiLoadDialog.show();
         }else{
             Toast.makeText(getApplicationContext(), R.string.brapi_warning_select_study, Toast.LENGTH_SHORT).show();
         }
     }
+
+
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
