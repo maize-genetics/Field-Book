@@ -60,6 +60,8 @@ import org.brapi.v2.model.pheno.response.BrAPIObservationVariableListResponse;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -634,7 +636,9 @@ public class BrAPIServiceV2 implements BrAPIService{
             //    protected java.lang.String externalReferenceID;
             //    protected java.lang.String externalReferenceSource;
             ObservationQueryParams queryParams = new ObservationQueryParams();
-            queryParams.studyDbId(studyDbId);
+            queryParams.studyDbId(studyDbId).page(paginationManager.getPage()).pageSize(paginationManager.getPageSize());
+
+            System.out.println(queryParams.toString());
             observationsApi.observationsGetAsync(queryParams, callback);
 
 
@@ -975,6 +979,7 @@ public class BrAPIServiceV2 implements BrAPIService{
             // We want the saving of plots and traits wrap together in a transaction
             // so if they fail, the field can be deleted.
             try {
+                System.out.println("Size of study details: "+studyDetails.getValues().size());
                 for (List<String> dataRow : studyDetails.getValues()) {
                     dataHelper.createFieldData(expId, studyDetails.getAttributes(), dataRow);
                 }
@@ -984,18 +989,29 @@ public class BrAPIServiceV2 implements BrAPIService{
                     dataHelper.insertTraits(t);
                 }
 
-                for(Observation obs : studyDetails.getObservations()) {
-                    System.out.println("Saving: varName: "+obs.getVariableName());
-                    System.out.println("Saving: value: "+obs.getValue());
-                    System.out.println("Saving: studyId: "+obs.getStudyId());
-                    System.out.println("Saving: unitDBId: "+obs.getUnitDbId());
-                    System.out.println("Saving: varDbId: "+obs.getVariableDbId());
-                    System.out.println("Saving: StudyId: "+studyDetails.getStudyDbId());
-                    System.out.println("Saving: expId: "+expId);
-//                    TraitObject trait = ObservationVariableDao.Companion.getTraitByName(obs.getVariableName());
-//                    System.out.println("SavingL TraitId: "+trait.getId());
-                    dataHelper.setTraitObservations(expId, obs);
-                }
+                List<Observation> observations = studyDetails.getObservations();
+
+                //TODO Uncomment all of this.
+//                //Need to sort by time stamp so we only keep the most recent observations
+//                Collections.sort(observations, new Comparator<Observation>() {
+//                    @Override
+//                    public int compare(Observation obs1, Observation obs2) {
+//                        return obs2.getTimestamp().compareTo(obs1.getTimestamp());
+//                    }
+//                });
+
+//                for(Observation obs : observations) {
+//                    System.out.println("Saving: varName: "+obs.getVariableName());
+//                    System.out.println("Saving: value: "+obs.getValue());
+//                    System.out.println("Saving: studyId: "+obs.getStudyId());
+//                    System.out.println("Saving: unitDBId: "+obs.getUnitDbId());
+//                    System.out.println("Saving: varDbId: "+obs.getVariableDbId());
+//                    System.out.println("Saving: StudyId: "+studyDetails.getStudyDbId());
+//                    System.out.println("Saving: expId: "+expId);
+////                    TraitObject trait = ObservationVariableDao.Companion.getTraitByName(obs.getVariableName());
+////                    System.out.println("SavingL TraitId: "+trait.getId());
+//                    dataHelper.setTraitObservations(expId, obs);
+//                }
 
 
                 // If we haven't thrown an error by now, we are good.

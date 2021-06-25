@@ -20,10 +20,13 @@ import com.fieldbook.tracker.objects.TraitObject;
 import com.fieldbook.tracker.preferences.GeneralKeys;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import io.swagger.client.ApiClient;
 import io.swagger.client.ApiException;
@@ -662,6 +665,8 @@ public class BrAPIServiceV1 implements BrAPIService {
             newObservation.setVariableDbId(brapiObservation.getObservationVariableDbId());
             newObservation.setValue(brapiObservation.getValue());
 
+            newObservation.setTimestamp(brapiObservation.getObservationTimeStamp());
+
             outputList.add(newObservation);
 
         }
@@ -974,7 +979,16 @@ public class BrAPIServiceV1 implements BrAPIService {
             // We want the saving of plots and traits wrap together in a transaction
             // so if they fail, the field can be deleted.
             try {
-                for (List<String> dataRow : studyDetails.getValues()) {
+                int plotId = studyDetails.getAttributes().indexOf("Plot");
+
+                System.out.println("Size of study details: "+studyDetails.getValues().size());
+
+                List<List<String>> sortedPlotValues = studyDetails.getValues()
+                        .stream()
+                        .sorted((plot1, plot2) -> Integer.parseInt(plot1.get(plotId)) - Integer.parseInt(plot2.get(plotId)))
+                        .collect(Collectors.toList());
+//                for (List<String> dataRow : studyDetails.getValues()) {
+                for (List<String> dataRow : sortedPlotValues) {
                     dataHelper.createFieldData(expId, studyDetails.getAttributes(), dataRow);
                 }
 
