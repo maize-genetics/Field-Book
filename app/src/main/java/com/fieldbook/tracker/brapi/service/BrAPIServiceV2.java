@@ -7,12 +7,14 @@ import android.util.Log;
 import androidx.arch.core.util.Function;
 
 import com.fieldbook.tracker.brapi.BrapiControllerResponse;
+import com.fieldbook.tracker.brapi.model.BrapiObservation;
 import com.fieldbook.tracker.brapi.model.BrapiProgram;
 import com.fieldbook.tracker.brapi.model.BrapiStudyDetails;
 import com.fieldbook.tracker.brapi.model.BrapiTrial;
 import com.fieldbook.tracker.brapi.model.FieldBookImage;
 import com.fieldbook.tracker.brapi.model.Observation;
 import com.fieldbook.tracker.database.DataHelper;
+import com.fieldbook.tracker.database.dao.ObservationVariableDao;
 import com.fieldbook.tracker.objects.FieldObject;
 import com.fieldbook.tracker.objects.TraitObject;
 import com.fieldbook.tracker.preferences.GeneralKeys;
@@ -22,6 +24,7 @@ import org.brapi.client.v2.model.exceptions.ApiException;
 import org.brapi.client.v2.model.queryParams.core.ProgramQueryParams;
 import org.brapi.client.v2.model.queryParams.core.StudyQueryParams;
 import org.brapi.client.v2.model.queryParams.core.TrialQueryParams;
+import org.brapi.client.v2.model.queryParams.phenotype.ObservationQueryParams;
 import org.brapi.client.v2.model.queryParams.phenotype.ObservationUnitQueryParams;
 import org.brapi.client.v2.model.queryParams.phenotype.VariableQueryParams;
 import org.brapi.client.v2.modules.core.ProgramsApi;
@@ -57,9 +60,14 @@ import org.brapi.v2.model.pheno.response.BrAPIObservationVariableListResponse;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
+
+import io.swagger.client.model.ObservationsResponse;
 
 public class BrAPIServiceV2 implements BrAPIService{
 
@@ -579,6 +587,75 @@ public class BrAPIServiceV2 implements BrAPIService{
         }
     }
 
+    public void getObservations(final String studyDbId, final List<String> observationVariableDbIds,
+                                BrapiPaginationManager paginationManager, final Function<List<Observation>, Void> function,
+                                final Function<Integer, Void> failFunction ) {
+        Integer initPage = paginationManager.getPage();
+
+        //org.brapi.client.v2.ApiCallback<org.brapi.v2.model.pheno.response.BrAPIObservationListResponse> callback
+        try {
+            BrapiV2ApiCallBack<BrAPIObservationListResponse> callback = new BrapiV2ApiCallBack<BrAPIObservationListResponse>() {
+                @Override
+                public void onSuccess(BrAPIObservationListResponse response, int i, Map<String, List<String>> map) {
+                    // Cancel processing if the page that was processed is not the page
+                    // that we are currently on. For Example: User taps "Next Page" before brapi call returns data
+                    if (initPage.equals(paginationManager.getPage())) {
+                        updatePageInfo(paginationManager, response.getMetadata());
+                        // Result contains a list of observation variables
+                        List<BrAPIObservation> brapiObservationList = response.getResult().getData();
+                        final List<Observation> observationList = mapObservations(brapiObservationList);
+
+                        function.apply(observationList);
+                    }
+                }
+
+                @Override
+                public void onFailure(ApiException error, int i, Map<String, List<String>> map) {
+                    failFunction.apply(error.getCode());
+                    Log.e("BrAPIServiceV2", "API Exception", error);
+                }
+
+            };
+
+
+            // Need to make one of these: ObservationQueryParams()
+            // protected java.lang.String observationDbId;
+            //    protected java.lang.String observationUnitDbId;
+            //    protected java.lang.String germplasmDbId;
+            //    protected java.lang.String observationVariableDbId;
+            //    protected java.lang.String studyDbId;
+            //    protected java.lang.String locationDbId;
+            //    protected java.lang.String trialDbId;
+            //    protected java.lang.String programDbId;
+            //    protected java.lang.String seasonDbId;
+            //    protected java.lang.String observationUnitLevelName;
+            //    protected java.lang.String observationUnitLevelOrder;
+            //    protected java.lang.String observationUnitLevelCode;
+            //    protected java.lang.String observationTimeStampRangeStart;
+            //    protected java.lang.String observationTimeStampRangeEnd;
+            //    protected java.lang.String externalReferenceID;
+            //    protected java.lang.String externalReferenceSource;
+            ObservationQueryParams queryParams = new ObservationQueryParams();
+            queryParams.studyDbId(studyDbId).page(paginationManager.getPage()).pageSize(paginationManager.getPageSize());
+
+            System.out.println(queryParams.toString());
+            observationsApi.observationsGetAsync(queryParams, callback);
+
+
+
+
+
+//        public com.squareup.okhttp.Call studiesStudyDbIdObservationsGetAsync(String studyDbId, List<String> observationVariableDbIds, Integer page,
+//                                      Integer pageSize, String authorization, ApiCallback<ObservationsResponse> callback) throws ApiException { /* compiled code */ }
+//            observationsApi.studiesStudyDbIdObservationsGetAsync(studyDbId,observationVariableDbIds, paginationManager.getPage(), paginationManager.getPageSize(),
+//                    getBrapiToken(), callback);
+
+        } catch (ApiException e) {
+            Log.e("error-go", e.toString());
+            failFunction.apply(e.getCode());
+        }
+    }
+
 
     private Observation mapToObservation(BrAPIObservation obs){
         Observation newObservation = new Observation();
@@ -586,6 +663,23 @@ public class BrAPIServiceV2 implements BrAPIService{
         newObservation.setUnitDbId(obs.getObservationUnitDbId());
         newObservation.setVariableDbId(obs.getObservationVariableDbId());
         return newObservation;
+    }
+
+    private List<Observation> mapObservations(List<BrAPIObservation> brapiObservationList) {
+        List<Observation> outputList = new ArrayList<>();
+        for(BrAPIObservation brapiObservation : brapiObservationList) {
+            Observation newObservation = new Observation();
+
+            newObservation.setVariableName(brapiObservation.getObservationVariableName());
+            newObservation.setDbId(brapiObservation.getObservationDbId());
+            newObservation.setUnitDbId(brapiObservation.getObservationUnitDbId());
+            newObservation.setVariableDbId(brapiObservation.getObservationVariableDbId());
+            newObservation.setValue(brapiObservation.getValue());
+
+            outputList.add(newObservation);
+
+        }
+        return outputList;
     }
 
     public void createObservations(List<Observation> observations,
@@ -885,6 +979,7 @@ public class BrAPIServiceV2 implements BrAPIService{
             // We want the saving of plots and traits wrap together in a transaction
             // so if they fail, the field can be deleted.
             try {
+                System.out.println("Size of study details: "+studyDetails.getValues().size());
                 for (List<String> dataRow : studyDetails.getValues()) {
                     dataHelper.createFieldData(expId, studyDetails.getAttributes(), dataRow);
                 }
@@ -893,6 +988,31 @@ public class BrAPIServiceV2 implements BrAPIService{
                 for (TraitObject t : studyDetails.getTraits()) {
                     dataHelper.insertTraits(t);
                 }
+
+                List<Observation> observations = studyDetails.getObservations();
+
+                //TODO Uncomment all of this.
+//                //Need to sort by time stamp so we only keep the most recent observations
+//                Collections.sort(observations, new Comparator<Observation>() {
+//                    @Override
+//                    public int compare(Observation obs1, Observation obs2) {
+//                        return obs2.getTimestamp().compareTo(obs1.getTimestamp());
+//                    }
+//                });
+
+//                for(Observation obs : observations) {
+//                    System.out.println("Saving: varName: "+obs.getVariableName());
+//                    System.out.println("Saving: value: "+obs.getValue());
+//                    System.out.println("Saving: studyId: "+obs.getStudyId());
+//                    System.out.println("Saving: unitDBId: "+obs.getUnitDbId());
+//                    System.out.println("Saving: varDbId: "+obs.getVariableDbId());
+//                    System.out.println("Saving: StudyId: "+studyDetails.getStudyDbId());
+//                    System.out.println("Saving: expId: "+expId);
+////                    TraitObject trait = ObservationVariableDao.Companion.getTraitByName(obs.getVariableName());
+////                    System.out.println("SavingL TraitId: "+trait.getId());
+//                    dataHelper.setTraitObservations(expId, obs);
+//                }
+
 
                 // If we haven't thrown an error by now, we are good.
                 DataHelper.db.setTransactionSuccessful();

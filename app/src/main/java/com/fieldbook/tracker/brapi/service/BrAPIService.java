@@ -145,7 +145,9 @@ public interface BrAPIService {
     public void getPlotDetails(final String studyDbId, final Function<BrapiStudyDetails, Void> function, final Function<Integer, Void> failFunction);
 
     public void getOntology(BrapiPaginationManager paginationManager, final Function<List<TraitObject>, Void> function, final Function<Integer, Void> failFunction);
-
+    public void getObservations(final String studyDbId, final List<String> observationVariableDbIds,
+                                BrapiPaginationManager paginationManager, final Function<List<Observation>, Void> function,
+                                final Function<Integer, Void> failFunction );
     public void createObservations(List<Observation> observations,
                                    final Function<List<Observation>, Void> function,
                                    final Function<Integer, Void> failFunction);

@@ -47,6 +47,7 @@ import android.widget.Toast;
 import com.fieldbook.tracker.R;
 import com.fieldbook.tracker.brapi.service.BrAPIService;
 import com.fieldbook.tracker.brapi.BrapiAuthDialog;
+import com.fieldbook.tracker.brapi.service.BrAPIServiceFactory;
 import com.fieldbook.tracker.database.DataHelper;
 import com.fieldbook.tracker.objects.FieldObject;
 import com.fieldbook.tracker.preferences.GeneralKeys;
@@ -65,6 +66,8 @@ import com.michaelflisar.changelog.internal.ChangelogDialogFragment;
 
 import java.io.File;
 import java.io.FileWriter;
+import java.net.MalformedURLException;
+import java.net.URL;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -207,9 +210,9 @@ public class ConfigActivity extends AppCompatActivity {
         settingsList = findViewById(R.id.myList);
 
         String[] configList = new String[]{getString(R.string.settings_fields),
-                getString(R.string.settings_traits), getString(R.string.settings_collect),  getString(R.string.settings_export), getString(R.string.settings_advanced), getString(R.string.about_title)};
+                getString(R.string.settings_traits), getString(R.string.settings_collect),  getString(R.string.settings_export), getString(R.string.settings_advanced), getString(R.string.about_title),"Sync Observations"};
 
-        Integer[] image_id = {R.drawable.ic_nav_drawer_fields, R.drawable.ic_nav_drawer_traits, R.drawable.ic_nav_drawer_collect_data, R.drawable.trait_date_save, R.drawable.ic_nav_drawer_settings, R.drawable.ic_tb_info};
+        Integer[] image_id = {R.drawable.ic_nav_drawer_fields, R.drawable.ic_nav_drawer_traits, R.drawable.ic_nav_drawer_collect_data, R.drawable.trait_date_save, R.drawable.ic_nav_drawer_settings, R.drawable.ic_tb_info,R.drawable.ic_pref_database_export};
 
         settingsList.setOnItemClickListener(new OnItemClickListener() {
             public void onItemClick(AdapterView<?> av, View arg1, int position, long arg3) {
@@ -265,6 +268,10 @@ public class ConfigActivity extends AppCompatActivity {
                                 AboutActivity.class.getName());
                         startActivity(intent);
                         break;
+                    case 6:
+                        if (checkTraitsExist() < 0) return;
+                        syncBrapiObs();
+
                 }
             }
         });
@@ -572,6 +579,79 @@ public class ConfigActivity extends AppCompatActivity {
             BrapiAuthDialog brapiAuth = new BrapiAuthDialog(ConfigActivity.this);
             brapiAuth.show();
         }
+    }
+
+    private void syncBrapiObs() {
+        System.out.println("Clicked sync button:");
+
+        BrAPIService brapiActivity = BrAPIServiceFactory.getBrAPIService(getApplicationContext());
+
+        // Get our active field
+        Integer activeFieldId = ep.getInt("SelectedFieldExpId", -1);
+        FieldObject activeField;
+        if (activeFieldId != -1) {
+            activeField = dt.getFieldObject(activeFieldId);
+        } else {
+            activeField = null;
+            Toast.makeText(ConfigActivity.this, R.string.warning_field_missing, Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        System.out.println("***************");
+        System.out.println(activeField.getExp_source());
+        System.out.println(activeField.getExp_id());
+        System.out.println(activeField.getPrimary_id());
+        System.out.println(activeField.getSecondary_id());
+        System.out.println(activeField.getUnique_id());
+        System.out.println(activeField.getExp_name());
+
+
+        // Check that our field is a brapi field
+        if (activeField.getExp_source() == null ||
+                activeField.getExp_source() == "" ||
+                activeField.getExp_source() == "local") {
+
+            Toast.makeText(ConfigActivity.this, R.string.brapi_field_not_selected, Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        // Check that the field data source is the same as the current target
+        if (!BrAPIService.checkMatchBrapiUrl(ConfigActivity.this, activeField.getExp_source())) {
+
+            String hostURL = BrAPIService.getHostUrl(ConfigActivity.this);
+            String badSourceMsg = getResources().getString(R.string.brapi_field_non_matching_sources, activeField.getExp_source(), hostURL);
+            Toast.makeText(ConfigActivity.this, badSourceMsg, Toast.LENGTH_LONG).show();
+            System.out.println("Does not match brapi");
+            return;
+        }
+
+        URL externalUrl = null;
+        try {
+            externalUrl = new URL(BrAPIService.getBrapiUrl(ConfigActivity.this));
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
+        }
+        String hostURL = externalUrl.getHost();
+
+        System.out.println("Matches Brapi.");
+        System.out.println("hostURL: "+hostURL);
+//        // Check if we are authorized and force authorization if not.
+//        if (BrAPIService.isLoggedIn(getApplicationContext())) {
+////            Intent exportIntent = new Intent(ConfigActivity.this, BrapiExportActivity.class);
+////            startActivity(exportIntent);
+//
+//            System.out.println(activeFieldId);
+//
+//            //        brapiActivity.getObservations(exp_id,);
+//
+//        } else {
+//            // Show our login dialog
+//            BrapiAuthDialog brapiAuth = new BrapiAuthDialog(ConfigActivity.this);
+//            brapiAuth.show();
+//        }
+
+
+
     }
 
     private void showSaveDialog() {

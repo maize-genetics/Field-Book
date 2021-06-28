@@ -19,11 +19,15 @@ import androidx.annotation.NonNull;
 import androidx.arch.core.util.Function;
 
 import com.fieldbook.tracker.brapi.model.BrapiStudyDetails;
+import com.fieldbook.tracker.brapi.model.Observation;
 import com.fieldbook.tracker.brapi.service.BrAPIService;
 import com.fieldbook.tracker.brapi.service.BrAPIServiceFactory;
 import com.fieldbook.tracker.R;
+import com.fieldbook.tracker.brapi.service.BrapiPaginationManager;
+import com.fieldbook.tracker.objects.TraitObject;
 
 import java.util.ArrayList;
+import java.util.List;
 
 public class BrapiLoadDialog extends Dialog implements android.view.View.OnClickListener {
 
@@ -35,6 +39,8 @@ public class BrapiLoadDialog extends Dialog implements android.view.View.OnClick
     private Boolean studyLoadStatus = false;
     private Boolean plotLoadStatus = false;
     private Boolean traitLoadStatus = false;
+
+    private BrapiPaginationManager paginationManager;
     // Creates a new thread to do importing
     private Runnable importRunnable = new Runnable() {
         public void run() {
@@ -49,6 +55,10 @@ public class BrapiLoadDialog extends Dialog implements android.view.View.OnClick
 
     public void setSelectedStudy(BrapiStudyDetails selectedStudy) {
         this.study = selectedStudy;
+    }
+
+    public void setPaginationManager(BrapiPaginationManager paginationManager) {
+        this.paginationManager = paginationManager;
     }
 
     @Override
@@ -71,7 +81,9 @@ public class BrapiLoadDialog extends Dialog implements android.view.View.OnClick
         saveBtn.setVisibility(View.GONE);
         studyDetails = new BrapiStudyDetails();
         buildStudyDetails();
+        loadObservations();
         loadStudy();
+
     }
 
     private void buildStudyDetails() {
@@ -194,6 +206,72 @@ public class BrapiLoadDialog extends Dialog implements android.view.View.OnClick
                 return null;
             }
         });
+    }
+
+    private void loadObservations() {
+        System.out.println("Study DBId: "+study.getStudyDbId());
+
+        List<String> observationIds = new ArrayList<String>();
+
+        //Trying to get the traits as well:
+        brAPIService.getTraits(study.getStudyDbId(), new Function<BrapiStudyDetails, Void>() {
+            @Override
+            public Void apply(BrapiStudyDetails input) {
+                for(TraitObject obj : input.getTraits()) {
+//                    System.out.println("Trait:"+obj.getTrait());
+//                    System.out.println("ObsIds: "+obj.getExternalDbId());
+                    observationIds.add(obj.getExternalDbId());
+                }
+
+                return null;
+            }
+        }, new Function<Integer, Void>() {
+            @Override
+            public Void apply(Integer input) {
+//                                        BrapiServiceTest.this.checkGetTraitsResult = false;
+                // Notify the countdown that we are finish
+//                                        signal.countDown();
+                return null;
+            }
+        });
+
+        System.out.println("obsIds Size:"+observationIds.size());
+        ArrayList<Observation> observationList = new ArrayList<>();
+        brAPIService.getObservations(study.getStudyDbId(), observationIds, paginationManager, new Function<List<Observation>, Void>() {
+            @Override
+            public Void apply(List<Observation> input) {
+                study.setObservations(input);
+                BrapiStudyDetails.merge(studyDetails, study);
+//                observationList.addAll(input);
+                for(Observation obs : input) {
+
+                    System.out.println("StudyId: "+obs.getStudyId());
+                    System.out.println(obs.getDbId());
+                    System.out.println(obs.getUnitDbId());
+
+                    System.out.println(obs.getVariableDbId());
+                    System.out.println(obs.getVariableName());
+                    System.out.println(obs.getValue());
+//                    observationList.add(obs);
+                }
+                return null;
+            }
+        }, new Function<Integer, Void>() {
+            @Override
+            public Void apply(Integer input) {
+                System.out.println("Stopped:");
+                return null;
+            }
+        });
+
+//                                List<TraitObject> traits = selectedStudy.getTraits();
+//
+//                                for(TraitObject traitObject : selectedStudy.getTraits()) {
+//                                    System.out.println("    "+traitObject.getTrait());
+//                                }
+
+//        System.out.println("Size"+observationList.size());
+//        this.selectedStudy.setObservations(observationList);
     }
 
     private void loadStudy() {

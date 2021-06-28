@@ -14,15 +14,19 @@ import com.fieldbook.tracker.brapi.model.BrapiTrial;
 import com.fieldbook.tracker.brapi.model.FieldBookImage;
 import com.fieldbook.tracker.brapi.model.Observation;
 import com.fieldbook.tracker.database.DataHelper;
+import com.fieldbook.tracker.database.dao.ObservationVariableDao;
 import com.fieldbook.tracker.objects.FieldObject;
 import com.fieldbook.tracker.objects.TraitObject;
 import com.fieldbook.tracker.preferences.GeneralKeys;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import io.swagger.client.ApiClient;
 import io.swagger.client.ApiException;
@@ -46,6 +50,7 @@ import io.swagger.client.model.ObservationUnit;
 import io.swagger.client.model.ObservationUnitsResponse1;
 import io.swagger.client.model.ObservationVariable;
 import io.swagger.client.model.ObservationVariablesResponse;
+import io.swagger.client.model.ObservationsResponse;
 import io.swagger.client.model.Program;
 import io.swagger.client.model.ProgramsResponse;
 import io.swagger.client.model.StudiesResponse;
@@ -605,12 +610,70 @@ public class BrAPIServiceV1 implements BrAPIService {
         }
     }
 
+    public void getObservations(final String studyDbId, final List<String> observationVariableDbIds,
+                                BrapiPaginationManager paginationManager, final Function<List<Observation>, Void> function,
+                                final Function<Integer, Void> failFunction ) {
+        Integer initPage = paginationManager.getPage();
+
+        try {
+            BrapiV1ApiCallBack<ObservationsResponse> callback = new BrapiV1ApiCallBack<ObservationsResponse>() {
+                @Override
+                public void onSuccess(ObservationsResponse response, int i, Map<String, List<String>> map) {
+                    // Cancel processing if the page that was processed is not the page
+                    // that we are currently on. For Example: User taps "Next Page" before brapi call returns data
+                    if (initPage.equals(paginationManager.getPage())) {
+                        updatePageInfo(paginationManager, response.getMetadata());
+                        // Result contains a list of observation variables
+                        List<io.swagger.client.model.Observation> brapiObservationList = response.getResult().getData();
+                        final List<Observation> observationList = mapObservations(brapiObservationList);
+
+                        function.apply(observationList);
+                    }
+                }
+
+                @Override
+                public void onFailure(ApiException error, int i, Map<String, List<String>> map) {
+                    failFunction.apply(error.getCode());
+                }
+
+            };
+
+//        public com.squareup.okhttp.Call studiesStudyDbIdObservationsGetAsync(String studyDbId, List<String> observationVariableDbIds, Integer page,
+//                                      Integer pageSize, String authorization, ApiCallback<ObservationsResponse> callback) throws ApiException { /* compiled code */ }
+            observationsApi.studiesStudyDbIdObservationsGetAsync(studyDbId,observationVariableDbIds, paginationManager.getPage(), paginationManager.getPageSize(),
+                    getBrapiToken(), callback);
+
+        } catch (ApiException e) {
+            Log.e("error-go", e.toString());
+            failFunction.apply(e.getCode());
+        }
+    }
+
     private Observation mapToObservation(NewObservationDbIdsObservations obs){
         Observation newObservation = new Observation();
         newObservation.setDbId(obs.getObservationDbId());
         newObservation.setUnitDbId(obs.getObservationUnitDbId());
         newObservation.setVariableDbId(obs.getObservationVariableDbId());
         return newObservation;
+    }
+
+    private List<Observation> mapObservations(List<io.swagger.client.model.Observation> brapiObservationList) {
+        List<Observation> outputList = new ArrayList<>();
+        for(io.swagger.client.model.Observation brapiObservation : brapiObservationList) {
+            Observation newObservation = new Observation();
+
+            newObservation.setVariableName(brapiObservation.getObservationVariableName());
+            newObservation.setDbId(brapiObservation.getObservationDbId());
+            newObservation.setUnitDbId(brapiObservation.getObservationUnitDbId());
+            newObservation.setVariableDbId(brapiObservation.getObservationVariableDbId());
+            newObservation.setValue(brapiObservation.getValue());
+
+            newObservation.setTimestamp(brapiObservation.getObservationTimeStamp());
+
+            outputList.add(newObservation);
+
+        }
+        return outputList;
     }
 
     public void createObservations(List<Observation> observations,
@@ -919,13 +982,35 @@ public class BrAPIServiceV1 implements BrAPIService {
             // We want the saving of plots and traits wrap together in a transaction
             // so if they fail, the field can be deleted.
             try {
-                for (List<String> dataRow : studyDetails.getValues()) {
+                int plotId = studyDetails.getAttributes().indexOf("Plot");
+
+                System.out.println("Size of study details: "+studyDetails.getValues().size());
+
+                List<List<String>> sortedPlotValues = studyDetails.getValues()
+                        .stream()
+                        .sorted((plot1, plot2) -> Integer.parseInt(plot1.get(plotId)) - Integer.parseInt(plot2.get(plotId)))
+                        .collect(Collectors.toList());
+//                for (List<String> dataRow : studyDetails.getValues()) {
+                for (List<String> dataRow : sortedPlotValues) {
                     dataHelper.createFieldData(expId, studyDetails.getAttributes(), dataRow);
                 }
 
                 // Insert the traits already associated with this study
                 for (TraitObject t : studyDetails.getTraits()) {
                     dataHelper.insertTraits(t);
+                }
+
+                for(Observation obs : studyDetails.getObservations()) {
+                    System.out.println("Saving: varName: "+obs.getVariableName());
+                    System.out.println("Saving: value: "+obs.getValue());
+                    System.out.println("Saving: studyId: "+obs.getStudyId());
+                    System.out.println("Saving: unitDBId: "+obs.getUnitDbId());
+                    System.out.println("Saving: varDbId: "+obs.getVariableDbId());
+                    System.out.println("Saving: StudyId: "+studyDetails.getStudyDbId());
+                    System.out.println("Saving: expId: "+expId);
+                    TraitObject trait = ObservationVariableDao.Companion.getTraitByName(obs.getVariableName());
+                    System.out.println("SavingL TraitId: "+trait.getId());
+                    dataHelper.setTraitObservations(expId, obs);
                 }
 
                 // If we haven't thrown an error by now, we are good.
