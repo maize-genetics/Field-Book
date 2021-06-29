@@ -668,7 +668,7 @@ public class BrAPIServiceV1 implements BrAPIService {
             newObservation.setVariableDbId(brapiObservation.getObservationVariableDbId());
             newObservation.setValue(brapiObservation.getValue());
 
-            newObservation.setTimestamp(brapiObservation.getObservationTimeStamp());
+//            newObservation.setTimestamp(brapiObservation.getObservationTimeStamp());
 
             outputList.add(newObservation);
 
