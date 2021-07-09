@@ -714,6 +714,7 @@ public class BrAPIServiceV1 implements BrAPIService {
 
                 @Override
                 public void onFailure(ApiException e, int statusCode, Map<String, List<String>> responseHeaders) {
+                    System.out.println("ABCD:");
                     failFunction.apply(e.getCode());
                 }
             };
@@ -988,8 +989,11 @@ public class BrAPIServiceV1 implements BrAPIService {
 
                 List<List<String>> sortedPlotValues = studyDetails.getValues()
                         .stream()
+                        .distinct()
                         .sorted((plot1, plot2) -> Integer.parseInt(plot1.get(plotId)) - Integer.parseInt(plot2.get(plotId)))
                         .collect(Collectors.toList());
+
+                System.out.println("Size of study details after sort: "+sortedPlotValues.size());
 //                for (List<String> dataRow : studyDetails.getValues()) {
                 for (List<String> dataRow : sortedPlotValues) {
                     dataHelper.createFieldData(expId, studyDetails.getAttributes(), dataRow);
