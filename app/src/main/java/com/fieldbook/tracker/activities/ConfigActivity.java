@@ -209,10 +209,16 @@ public class ConfigActivity extends AppCompatActivity {
 
         settingsList = findViewById(R.id.myList);
 
-        String[] configList = new String[]{getString(R.string.settings_fields),
-                getString(R.string.settings_traits), getString(R.string.settings_collect),  getString(R.string.settings_export), getString(R.string.settings_advanced), getString(R.string.about_title),"Sync Observations"};
+//        String[] configList = new String[]{getString(R.string.settings_fields),
+//                getString(R.string.settings_traits), getString(R.string.settings_collect),  getString(R.string.settings_export), getString(R.string.settings_advanced), getString(R.string.about_title),"Sync Observations"};
+//
+//        Integer[] image_id = {R.drawable.ic_nav_drawer_fields, R.drawable.ic_nav_drawer_traits, R.drawable.ic_nav_drawer_collect_data, R.drawable.trait_date_save, R.drawable.ic_nav_drawer_settings, R.drawable.ic_tb_info,R.drawable.ic_pref_database_export};
 
-        Integer[] image_id = {R.drawable.ic_nav_drawer_fields, R.drawable.ic_nav_drawer_traits, R.drawable.ic_nav_drawer_collect_data, R.drawable.trait_date_save, R.drawable.ic_nav_drawer_settings, R.drawable.ic_tb_info,R.drawable.ic_pref_database_export};
+        String[] configList = new String[]{getString(R.string.settings_fields),
+                getString(R.string.settings_traits), getString(R.string.settings_collect),  getString(R.string.settings_export), getString(R.string.settings_advanced), getString(R.string.about_title)};
+
+        Integer[] image_id = {R.drawable.ic_nav_drawer_fields, R.drawable.ic_nav_drawer_traits, R.drawable.ic_nav_drawer_collect_data, R.drawable.trait_date_save, R.drawable.ic_nav_drawer_settings, R.drawable.ic_tb_info};
+
 
         settingsList.setOnItemClickListener(new OnItemClickListener() {
             public void onItemClick(AdapterView<?> av, View arg1, int position, long arg3) {
@@ -268,9 +274,9 @@ public class ConfigActivity extends AppCompatActivity {
                                 AboutActivity.class.getName());
                         startActivity(intent);
                         break;
-                    case 6:
-                        if (checkTraitsExist() < 0) return;
-                        syncBrapiObs();
+//                    case 6:
+//                        if (checkTraitsExist() < 0) return;
+//                        syncBrapiObs();
 
                 }
             }
