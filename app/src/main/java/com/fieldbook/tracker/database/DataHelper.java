@@ -11,9 +11,7 @@ import android.database.sqlite.SQLiteStatement;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.util.Log;
-import android.widget.Toast;
 
-import com.fieldbook.tracker.activities.CollectActivity;
 import com.fieldbook.tracker.activities.ConfigActivity;
 import com.fieldbook.tracker.R;
 import com.fieldbook.tracker.brapi.model.FieldBookImage;
@@ -30,6 +28,7 @@ import com.fieldbook.tracker.objects.FieldObject;
 import com.fieldbook.tracker.objects.RangeObject;
 import com.fieldbook.tracker.objects.SearchData;
 import com.fieldbook.tracker.objects.TraitObject;
+import com.fieldbook.tracker.utilities.PrefsConstants;
 import com.fieldbook.tracker.utilities.Utils;
 
 import org.threeten.bp.OffsetDateTime;
@@ -51,8 +50,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import static com.fieldbook.tracker.activities.ConfigActivity.dt;
 
 /**
  * All database related functions are here
@@ -138,6 +135,19 @@ public class DataHelper {
         }
 
         return output.toString();
+    }
+
+    /**
+     * Used to sanitize traits in the selection clause of raw queries.
+     * Android SDK (SQLiteDatabase classes specifically) doesn't allow sanitization of columns in select clauses.
+     * Because FB accepts any trait/observation unit property name and eventually pivots these into columns names in
+     * DataHelper.switchField this function is necessary to manually sanitize.
+     * @param s string to sanitize
+     * @return string with escaped apostrophes
+     */
+    public static String replaceIdentifiers(String s) {
+
+        return s.replaceAll("'", "''");
     }
 
     /**
@@ -310,7 +320,7 @@ public class DataHelper {
      */
     public List<Observation> getUserTraitObservations() {
 
-        String exp_id = Integer.toString(ep.getInt("SelectedFieldExpId", 0));
+        String exp_id = Integer.toString(ep.getInt(PrefsConstants.SELECTED_FIELD_ID, 0));
 
         return ObservationDao.Companion.getUserTraitObservations(exp_id);
 
@@ -357,7 +367,7 @@ public class DataHelper {
      */
     public List<FieldBookImage> getUserTraitImageObservations() {
 
-        String exp_id = Integer.toString(ep.getInt("SelectedFieldExpId", 0));
+        String exp_id = Integer.toString(ep.getInt(PrefsConstants.SELECTED_FIELD_ID, 0));
 
         return ObservationDao.Companion.getUserTraitImageObservations(exp_id, missingPhoto);
 
@@ -752,7 +762,9 @@ public class DataHelper {
      */
     public Cursor getExportDBData(String[] fieldList, String[] traits) {
 
-        return ObservationUnitPropertyDao.Companion.getExportDbData(ep.getString("ImportUniqueName", ""), fieldList, traits);
+        return ObservationUnitPropertyDao.Companion.getExportDbData(
+                ep.getInt(PrefsConstants.SELECTED_FIELD_ID, -1),
+                ep.getString("ImportUniqueName", ""), fieldList, traits);
 
 //        String fields = arrayToString("range", fieldList);
 //        String activeTraits = arrayToLikeString(traits);
@@ -790,7 +802,9 @@ public class DataHelper {
      */
     public Cursor convertDatabaseToTable(String[] col, String[] traits) {
 
-        return ObservationUnitPropertyDao.Companion.convertDatabaseToTable(ep.getString("ImportUniqueName", ""), col, traits);
+        return ObservationUnitPropertyDao.Companion.convertDatabaseToTable(
+                ep.getInt(PrefsConstants.SELECTED_FIELD_ID, -1),
+                ep.getString("ImportUniqueName", ""), col, traits);
 
 //        String query;
 //        String[] rangeArgs = new String[col.length];
@@ -1186,9 +1200,9 @@ public class DataHelper {
      * Returns saved data based on plot_id
      * v1.6 - Amended to consider both trait and format
      */
-    public HashMap getUserDetail(String plotId) {
+    public HashMap<String, String> getUserDetail(String plotId) {
 
-        String exp_id = Integer.toString(ep.getInt("SelectedFieldExpId", 0));
+        String exp_id = Integer.toString(ep.getInt(PrefsConstants.SELECTED_FIELD_ID, 0));
 
         return ObservationDao.Companion.getUserDetail(exp_id, plotId);
 
@@ -1236,9 +1250,9 @@ public class DataHelper {
 
     }
 
-    public Observation getObservationByValue(String plotId, String parent, String value) {
+    public Observation getObservationByValue(String exp_id, String plotId, String parent, String value) {
 
-        return ObservationDao.Companion.getObservationByValue(plotId, parent, value);
+        return ObservationDao.Companion.getObservationByValue(exp_id, plotId, parent, value);
 
 //        Observation o = new Observation();
 //
@@ -1307,7 +1321,8 @@ public class DataHelper {
             }
         }
 
-        Integer[] result = ObservationUnitPropertyDao.Companion.getAllRangeId();
+        Integer[] result = ObservationUnitPropertyDao.Companion.getAllRangeId(context.getSharedPreferences("Settings", 0)
+                .getInt(PrefsConstants.SELECTED_FIELD_ID, 0));
 
         int[] data = new int[result.length];
 
@@ -1459,9 +1474,9 @@ public class DataHelper {
      * Helper function
      * v2.5
      */
-    public void deleteTraitByValue(String rid, String parent, String value) {
+    public void deleteTraitByValue(String expId, String rid, String parent, String value) {
 
-        ObservationDao.Companion.deleteTraitByValue(rid, parent, value);
+        ObservationDao.Companion.deleteTraitByValue(expId, rid, parent, value);
 
 //        try {
 //            db.delete(USER_TRAITS, "rid like ? and parent like ? and userValue = ?",
@@ -1488,9 +1503,9 @@ public class DataHelper {
      * Returns list of files associated with a specific plot
      */
 
-    public ArrayList<String> getPlotPhotos(String plot, String trait) {
+    public ArrayList<String> getPlotPhotos(String exp_id, String plot, String trait) {
 
-        return ObservationDao.Companion.getPlotPhotos(plot, trait);
+        return ObservationDao.Companion.getPlotPhotos(exp_id, plot, trait);
 
 //        try {
 //            //Cursor cursor = db.query(USER_TRAITS, new String[]{"userValue"}, "rid like ? and trait like ?", new String[]{plot, trait},
@@ -2161,10 +2176,16 @@ public class DataHelper {
 
             Migrator.Companion.migrateSchema(db, getAllTraitObjects());
 
-            ep.edit().putInt("SelectedFieldExpId", -1).apply();
-
         }
 
+        SharedPreferences.Editor edit = ep.edit();
+
+        edit.putInt(PrefsConstants.SELECTED_FIELD_ID, -1).apply();
+        edit.putString("ImportUniqueName", "");
+        edit.putString("ImportFirstName", "");
+        edit.putString("ImportSecondName", "");
+        edit.putBoolean("ImportFieldFinished", false);
+        edit.apply();
     }
 
     /**
@@ -2262,7 +2283,7 @@ public class DataHelper {
 
     }
 
-    private String getDatabasePath(Context context) {
+    public static String getDatabasePath(Context context) {
         return context.getDatabasePath(DATABASE_NAME).getPath();
     }
 
@@ -2394,9 +2415,15 @@ public class DataHelper {
                 do {
                     TraitObject o = new TraitObject();
 
+                    String traitName = cursor.getString(1);
+                    String format = cursor.getString(2);
+
+                    //v5.1.0 bugfix branch update, Android getString can return null.
+                    if (traitName == null || format == null) continue;
+
                     o.setId(cursor.getString(0));
-                    o.setTrait(cursor.getString(1));
-                    o.setFormat(cursor.getString(2));
+                    o.setTrait(traitName);
+                    o.setFormat(format);
                     o.setDefaultValue(cursor.getString(3));
                     o.setMinimum(cursor.getString(4));
                     o.setMaximum(cursor.getString(5));
@@ -2542,7 +2569,7 @@ public class DataHelper {
                 
                 Migrator.Companion.migrateSchema(db, getAllTraitObjects(db));
 
-                ep2.edit().putInt("SelectedFieldExpId", -1).apply();
+                ep2.edit().putInt(PrefsConstants.SELECTED_FIELD_ID, -1).apply();
             }
         }
     }

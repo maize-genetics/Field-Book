@@ -21,21 +21,21 @@ class ObservationDao {
 
     companion object {
 
-//        fun getAll(): Array<ObservationModel> = withDatabase { db ->
-//
-//            db.query(Observation.tableName)
-//                .toTable()
-//                .map { ObservationModel(it) }
-//                .toTypedArray()
-//
-//        } ?: emptyArray()
+        fun getAll(studyId: String): Array<ObservationModel> = withDatabase { db ->
+
+            db.query(Observation.tableName, where = "${Study.FK} = ?", whereArgs = arrayOf(studyId))
+                .toTable()
+                .map { ObservationModel(it) }
+                .toTypedArray()
+
+        } ?: emptyArray()
 
         //false warning, cursor is closed in toTable
         @SuppressLint("Recycle")
         fun getHostImageObservations(hostUrl: String, missingPhoto: Bitmap): List<FieldBookImage> = withDatabase { db ->
 
             db.rawQuery("""
-                SELECT props.observationUnitDbId AS uniqueName,
+                SELECT DISTINCT props.observationUnitDbId AS uniqueName,
                        props.observationUnitName AS firstName,
                 obs.${Observation.PK} AS id, 
                 obs.value AS value, 
@@ -66,7 +66,7 @@ class ObservationDao {
         """.trimIndent(), arrayOf(hostUrl)).toTable()
                     .map { row -> FieldBookImage(getStringVal(row, "value"), missingPhoto).apply {
                         unitDbId = getStringVal(row, "uniqueName")
-                        setDescriptiveOntologyTerms(listOf(getStringVal(row, "firstName")))
+                        setDescriptiveOntologyTerms(listOf(getStringVal(row, "external_db_id")))
                         setDescription(getStringVal(row, "observation_variable_details"))
                         setTimestamp(getStringVal(row, "observation_time_stamp"))
                         fieldBookDbId = getStringVal(row, "id")
@@ -132,10 +132,10 @@ class ObservationDao {
         private fun getStringVal(row: Map<String, Any?>?, column: String?) : String? {
             if(row != null && column != null){
                 if (row[column] != null){
-                    return row[column].toString();
+                    return row[column].toString()
                 }
             }
-            return null;
+            return null
         }
 
         fun getWrongSourceImageObservations(hostUrl: String, missingPhoto: Bitmap): List<FieldBookImage> = withDatabase { db ->
@@ -183,20 +183,23 @@ class ObservationDao {
 
         } ?: emptyList()
 
+        /**
+         * This function is used in the Collect activity.
+         * Brapi observations have an extra lastTimeSynced field that is compared with the observed time stamp.
+         * If the observation is synced or edited the value is replaced with NA and a warning is shown.
+         */
         fun isBrapiSynced(exp_id: String, rid: String, parent: String): Boolean = withDatabase {
 
             getObservation(exp_id, rid, parent)?.let { observation ->
 
                 observation.status in arrayOf(
-                        com.fieldbook.tracker.brapi.model.BrapiObservation.Status.SYNCED,
-                        com.fieldbook.tracker.brapi.model.BrapiObservation.Status.EDITED)
-
+                    com.fieldbook.tracker.brapi.model.BrapiObservation.Status.SYNCED,
+                    com.fieldbook.tracker.brapi.model.BrapiObservation.Status.EDITED)
 
             }
 
-            false
-
         } ?: false
+
         /**
          * In this case parent is the variable name and trait is the format
          */
@@ -278,11 +281,11 @@ class ObservationDao {
         /**
          * Should trait be observation_field_book_format?
          */
-        fun getPlotPhotos(plot: String, trait: String): ArrayList<String> = withDatabase { db ->
+        fun getPlotPhotos(expId: String, plot: String, trait: String): ArrayList<String> = withDatabase { db ->
 
             ArrayList(db.query(Observation.tableName, arrayOf("value"),
-                    where = "${ObservationUnit.FK} = ? AND observation_variable_name LIKE ?",
-                    whereArgs = arrayOf(plot, trait)).toTable().map {
+                    where = "${Study.FK} = ? AND ${ObservationUnit.FK} = ? AND observation_variable_name LIKE ?",
+                    whereArgs = arrayOf(expId, plot, trait)).toTable().map {
                 it["value"] as String
             })
 
@@ -297,55 +300,66 @@ class ObservationDao {
                             ObservationUnit.FK),
                     where = "${ObservationUnit.FK} LIKE ? AND ${Study.FK} LIKE ?",
                     whereArgs = arrayOf(plotId, expId))
-                    .toTable().map { it["observation_variable_name"].toString() to it["value"].toString() }
+                    .toTable().map { (it["observation_variable_name"] as? String ?: "") to it["value"].toString() }
                     .toTypedArray())
 
         } ?: hashMapOf()
 
-        /*
-        plotId is actually uniqueName
-        parent is trait/variable name
+        /**
+         * Should be used for observations imported via BrAPI.
+         * This function builds a BrAPI observation that has a specific last synced time field.
+         *
+         * @param exp_id the field identifier
+         * @param plotId the unique name of the currently selected field
+         * @param parent the variable name of the observation
          */
         fun getObservation(exp_id: String, plotId: String, parent: String): BrapiObservation? = withDatabase { db ->
 
             BrapiObservation().apply {
 
                 db.query(Observation.tableName,
-                        arrayOf(Observation.PK, ObservationUnit.FK, "observation_db_id", "last_synced_time"),
+                        arrayOf(Observation.PK, ObservationUnit.FK, "observation_db_id", "observation_time_stamp", "last_synced_time"),
                         where = "${Study.FK} = ? AND observation_variable_name LIKE ? AND ${ObservationUnit.FK} LIKE ?",
                         whereArgs = arrayOf(exp_id, parent, plotId)).toTable().forEach {
 
                     dbId = getStringVal(it, "observation_db_id")
                     unitDbId = getStringVal(it, ObservationUnit.FK)
+                    setTimestamp(getStringVal(it, "observation_time_stamp"))
                     setLastSyncedTime(getStringVal(it,"last_synced_time"))
                 }
             }
         }
 
-        fun getObservationByValue(plotId: String, parent: String, value: String): BrapiObservation? = withDatabase { db ->
+        fun getObservationByValue(expId: String, plotId: String, parent: String, value: String): BrapiObservation? = withDatabase { db ->
 
             BrapiObservation().apply {
                 db.query(Observation.tableName,
                         arrayOf("observation_db_id", "last_synced_time"),
-                        where = "${ObservationUnit.FK} LIKE ? AND observation_variable_name LIKE ? AND value LIKE ?",
-                        whereArgs = arrayOf(plotId, parent, value)).toFirst().let {
+                        where = "${Study.FK} = ? AND ${ObservationUnit.FK} LIKE ? AND observation_variable_name LIKE ? AND value LIKE ?",
+                        whereArgs = arrayOf(expId, plotId, parent, value)).toFirst().let {
                     dbId = getStringVal(it, "observation_db_id")
                     setLastSyncedTime(getStringVal(it,"last_synced_time"))
                 }
             }
         }
 
+        /**
+         * Deletes all observations for a given variable on a plot.
+         * @param id: the study id
+         * @param rid: the unique plot name
+         * @param parent: the observation variable (trait) name
+         */
         fun deleteTrait(id: String, rid: String, parent: String) = withDatabase { db ->
             db.delete(Observation.tableName,
                     "${Study.FK} = ? AND ${ObservationUnit.FK} LIKE ? AND observation_variable_name LIKE ?",
                     arrayOf(id, rid, parent))
         }
 
-        fun deleteTraitByValue(rid: String, parent: String, value: String) = withDatabase { db ->
+        fun deleteTraitByValue(expId: String, rid: String, parent: String, value: String) = withDatabase { db ->
 
             db.delete(Observation.tableName,
-                    "${ObservationUnit.FK} LIKE ? AND observation_variable_name LIKE ? AND value = ?",
-                    arrayOf(rid, parent, value))
+                    "${Study.FK} = ? AND ${ObservationUnit.FK} LIKE ? AND observation_variable_name LIKE ? AND value = ?",
+                    arrayOf(expId, rid, parent, value))
         }
 
         /**
