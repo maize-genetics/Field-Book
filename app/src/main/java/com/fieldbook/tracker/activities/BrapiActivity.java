@@ -236,6 +236,7 @@ public class BrapiActivity extends AppCompatActivity {
     private void saveStudy() {
         if(this.selectedStudy != null) {
             brapiLoadDialog.setSelectedStudy(this.selectedStudy);
+            brapiLoadDialog.setPaginationManager(this.paginationManager);
             brapiLoadDialog.setObservationLevel(this.selectedObservationLevel);
             brapiLoadDialog.show();
         } else{
