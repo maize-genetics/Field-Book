@@ -5,6 +5,10 @@
         android:id="@+id/sort"
         android:title="@string/fields_sort_update" />
     <item
+        android:id="@+id/syncObs"
+        android:title="Sync Observations"
+        />
+    <item
         android:id="@+id/delete"
         android:title="@string/fields_delete" />
 

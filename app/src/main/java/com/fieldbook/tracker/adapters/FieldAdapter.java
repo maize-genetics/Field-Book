@@ -1,6 +1,7 @@
 package com.fieldbook.tracker.adapters;
 
 import androidx.appcompat.app.AlertDialog;
+import androidx.arch.core.util.Function;
 
 import android.content.Context;
 import android.content.DialogInterface;
@@ -27,9 +28,14 @@ import com.fieldbook.tracker.activities.CollectActivity;
 import com.fieldbook.tracker.R;
 import com.fieldbook.tracker.brapi.BrapiInfoDialog;
 import com.fieldbook.tracker.activities.FieldEditorActivity;
+import com.fieldbook.tracker.brapi.model.BrapiStudyDetails;
+import com.fieldbook.tracker.brapi.model.Observation;
+import com.fieldbook.tracker.brapi.service.BrAPIService;
+import com.fieldbook.tracker.brapi.service.BrAPIServiceFactory;
 import com.fieldbook.tracker.database.dao.ObservationUnitAttributeDao;
 import com.fieldbook.tracker.database.dao.StudyDao;
 import com.fieldbook.tracker.objects.FieldObject;
+import com.fieldbook.tracker.objects.TraitObject;
 import com.fieldbook.tracker.utilities.DialogUtils;
 import com.fieldbook.tracker.utilities.PrefsConstants;
 
@@ -200,6 +206,12 @@ public class FieldAdapter extends BaseAdapter {
                     AlertDialog alert = showSortDialog(position);
                     DialogUtils.styleDialogs(alert);
                 }
+                else if (item.getItemId() == R.id.syncObs) {
+                    //TODO call the observation download code
+                    AlertDialog alert = createSyncItemAlertDialog(position);
+                    alert.show();
+                    DialogUtils.styleDialogs(alert);
+                }
 
                 return false;
             }
@@ -223,6 +235,98 @@ public class FieldAdapter extends BaseAdapter {
                 CollectActivity.reloadData = true;
             }
         };
+    }
+
+    private DialogInterface.OnClickListener makeConfirmSyncListener(final int position) {
+        return new DialogInterface.OnClickListener() {
+            // Do it when clicking Yes or No
+            @Override
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+
+//                ConfigActivity.dt.deleteField(getItem(position).getExp_id());
+
+                System.out.println("Clicked sync");
+                System.out.println("ExpId: "+getItem(position).getExp_id());
+                System.out.println("Name: "+getItem(position).getExp_name());
+                System.out.println("Alias: "+getItem(position).getExp_alias());
+                System.out.println("source: "+getItem(position).getExp_source());
+                System.out.println("primary ID: "+getItem(position).getPrimary_id());
+                System.out.println("secondary ID: "+getItem(position).getSecondary_id());
+                System.out.println("unique ID: "+getItem(position).getUnique_id());
+                syncObservations(getItem(position).getExp_alias());
+
+                getItem(position).getExp_id();
+
+//                if (getItem(position).getExp_id() == ep.getInt(PrefsConstants.SELECTED_FIELD_ID, -1)) {
+//                    setEditorItem(ep, null);
+//                }
+
+                FieldEditorActivity.loadData();
+                CollectActivity.reloadData = true;
+            }
+        };
+    }
+
+    private void syncObservations(String studyDbId) {
+        System.out.println("Clicked Sync 2");
+        Toast toast = Toast.makeText(context, "Sync Clicked", Toast.LENGTH_LONG);
+        toast.setGravity(Gravity.CENTER_VERTICAL|Gravity.CENTER_HORIZONTAL, 0, 0);
+        toast.show();
+
+
+        BrAPIService brAPIService = BrAPIServiceFactory.getBrAPIService(this.context);
+
+        List<String> observationIds = new ArrayList<String>();
+
+        //Trying to get the traits as well:
+        brAPIService.getTraits(studyDbId, new Function<BrapiStudyDetails, Void>() {
+            @Override
+            public Void apply(BrapiStudyDetails input) {
+                for(TraitObject obj : input.getTraits()) {
+                    System.out.println("Trait:"+obj.getTrait());
+                    System.out.println("ObsIds: "+obj.getExternalDbId());
+                    observationIds.add(obj.getExternalDbId());
+                }
+
+                return null;
+            }
+        }, new Function<Integer, Void>() {
+            @Override
+            public Void apply(Integer input) {
+                return null;
+            }
+        });
+
+        System.out.println("obsIds Size:"+observationIds.size());
+//        brAPIService.getObservations(studyDbId, observationIds, paginationManager, new Function<List<Observation>, Void>() {
+//            @Override
+//            public Void apply(List<Observation> input) {
+//                study.setObservations(input);
+//                BrapiStudyDetails.merge(studyDetails, study);
+//                System.out.println("StudyId: " + study.getStudyDbId());
+//                System.out.println("StudyName: " + study.getStudyName());
+//                for(Observation obs : input) {
+//
+//                    System.out.println("***************************");
+//                    System.out.println("StudyId: "+obs.getStudyId());
+//                    System.out.println("ObsId: "+obs.getDbId());
+//                    System.out.println("UnitDbId: "+obs.getUnitDbId());
+//
+//                    System.out.println("VariableDbId: "+obs.getVariableDbId());
+//                    System.out.println("VariableName: "+obs.getVariableName());
+//                    System.out.println("Value: "+obs.getValue());
+//                }
+//                return null;
+//            }
+//        }, new Function<Integer, Void>() {
+//            @Override
+//            public Void apply(Integer input) {
+//                System.out.println("Stopped:");
+//                return null;
+//            }
+//        });
+
     }
 
     private AlertDialog showSortDialog(final int position) {
@@ -358,6 +462,24 @@ public class FieldAdapter extends BaseAdapter {
         builder.setTitle(context.getString(R.string.fields_delete_study));
         builder.setMessage(context.getString(R.string.fields_delete_study_confirmation));
         builder.setPositiveButton(context.getString(R.string.dialog_yes), makeConfirmDeleteListener(position));
+        builder.setNegativeButton(context.getString(R.string.dialog_no), new DialogInterface.OnClickListener() {
+            public void onClick(DialogInterface dialog, int which) {
+                dialog.dismiss();
+            }
+
+        });
+
+        AlertDialog alert = builder.create();
+        return alert;
+    }
+
+    //TODO fix text to use the R.string Variables.
+    private AlertDialog createSyncItemAlertDialog(final int position) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(context, R.style.AppAlertDialog);
+
+        builder.setTitle("Sync Observations");
+        builder.setMessage("Are you sure you want to update observations for this Field?");
+        builder.setPositiveButton(context.getString(R.string.dialog_yes), makeConfirmSyncListener(position));
         builder.setNegativeButton(context.getString(R.string.dialog_no), new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface dialog, int which) {
                 dialog.dismiss();
