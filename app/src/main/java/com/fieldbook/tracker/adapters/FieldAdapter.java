@@ -32,10 +32,13 @@ import com.fieldbook.tracker.brapi.model.BrapiStudyDetails;
 import com.fieldbook.tracker.brapi.model.Observation;
 import com.fieldbook.tracker.brapi.service.BrAPIService;
 import com.fieldbook.tracker.brapi.service.BrAPIServiceFactory;
+import com.fieldbook.tracker.brapi.service.BrapiPaginationManager;
+import com.fieldbook.tracker.database.DataHelper;
 import com.fieldbook.tracker.database.dao.ObservationUnitAttributeDao;
 import com.fieldbook.tracker.database.dao.StudyDao;
 import com.fieldbook.tracker.objects.FieldObject;
 import com.fieldbook.tracker.objects.TraitObject;
+import com.fieldbook.tracker.preferences.GeneralKeys;
 import com.fieldbook.tracker.utilities.DialogUtils;
 import com.fieldbook.tracker.utilities.PrefsConstants;
 
@@ -244,8 +247,6 @@ public class FieldAdapter extends BaseAdapter {
             public void onClick(DialogInterface dialog, int which) {
                 dialog.dismiss();
 
-//                ConfigActivity.dt.deleteField(getItem(position).getExp_id());
-
                 System.out.println("Clicked sync");
                 System.out.println("ExpId: "+getItem(position).getExp_id());
                 System.out.println("Name: "+getItem(position).getExp_name());
@@ -254,13 +255,11 @@ public class FieldAdapter extends BaseAdapter {
                 System.out.println("primary ID: "+getItem(position).getPrimary_id());
                 System.out.println("secondary ID: "+getItem(position).getSecondary_id());
                 System.out.println("unique ID: "+getItem(position).getUnique_id());
-                syncObservations(getItem(position).getExp_alias());
+
+                //TODO uncomment to allow for it to start syncing observations.
+//                syncObservations(getItem(position));
 
                 getItem(position).getExp_id();
-
-//                if (getItem(position).getExp_id() == ep.getInt(PrefsConstants.SELECTED_FIELD_ID, -1)) {
-//                    setEditorItem(ep, null);
-//                }
 
                 FieldEditorActivity.loadData();
                 CollectActivity.reloadData = true;
@@ -268,7 +267,11 @@ public class FieldAdapter extends BaseAdapter {
         };
     }
 
-    private void syncObservations(String studyDbId) {
+//    private void syncObservations(String studyDbId) {
+    private void syncObservations(FieldObject study) {
+        String brapiStudyDbId = study.getExp_alias();
+        int fieldBookStudyDbId = study.getExp_id();
+
         System.out.println("Clicked Sync 2");
         Toast toast = Toast.makeText(context, "Sync Clicked", Toast.LENGTH_LONG);
         toast.setGravity(Gravity.CENTER_VERTICAL|Gravity.CENTER_HORIZONTAL, 0, 0);
@@ -280,7 +283,7 @@ public class FieldAdapter extends BaseAdapter {
         List<String> observationIds = new ArrayList<String>();
 
         //Trying to get the traits as well:
-        brAPIService.getTraits(studyDbId, new Function<BrapiStudyDetails, Void>() {
+        brAPIService.getTraits(brapiStudyDbId, new Function<BrapiStudyDetails, Void>() {
             @Override
             public Void apply(BrapiStudyDetails input) {
                 for(TraitObject obj : input.getTraits()) {
@@ -288,6 +291,8 @@ public class FieldAdapter extends BaseAdapter {
                     System.out.println("ObsIds: "+obj.getExternalDbId());
                     observationIds.add(obj.getExternalDbId());
                 }
+
+                getObservations(brAPIService, brapiStudyDbId ,fieldBookStudyDbId,observationIds);
 
                 return null;
             }
@@ -299,34 +304,44 @@ public class FieldAdapter extends BaseAdapter {
         });
 
         System.out.println("obsIds Size:"+observationIds.size());
-//        brAPIService.getObservations(studyDbId, observationIds, paginationManager, new Function<List<Observation>, Void>() {
-//            @Override
-//            public Void apply(List<Observation> input) {
-//                study.setObservations(input);
-//                BrapiStudyDetails.merge(studyDetails, study);
-//                System.out.println("StudyId: " + study.getStudyDbId());
-//                System.out.println("StudyName: " + study.getStudyName());
-//                for(Observation obs : input) {
-//
-//                    System.out.println("***************************");
-//                    System.out.println("StudyId: "+obs.getStudyId());
-//                    System.out.println("ObsId: "+obs.getDbId());
-//                    System.out.println("UnitDbId: "+obs.getUnitDbId());
-//
-//                    System.out.println("VariableDbId: "+obs.getVariableDbId());
-//                    System.out.println("VariableName: "+obs.getVariableName());
-//                    System.out.println("Value: "+obs.getValue());
-//                }
-//                return null;
-//            }
-//        }, new Function<Integer, Void>() {
-//            @Override
-//            public Void apply(Integer input) {
-//                System.out.println("Stopped:");
-//                return null;
-//            }
-//        });
 
+    }
+
+    private void getObservations(BrAPIService brAPIService,String brapiStudyDbId,int fieldbookStudyDbId, List<String> observationIds) {
+        int pageSize = Integer.parseInt(context.getSharedPreferences("Settings", 0)
+                .getString(GeneralKeys.BRAPI_PAGE_SIZE, "1000"));
+
+        BrapiPaginationManager paginationManager =  new BrapiPaginationManager(0,pageSize);
+
+        DataHelper dataHelper = new DataHelper(context);
+
+        brAPIService.getObservations(brapiStudyDbId, observationIds, paginationManager, new Function<List<Observation>, Void>() {
+            @Override
+            public Void apply(List<Observation> input) {
+
+                System.out.println("EnteredIn Observation code: "+ input.size());
+                for(Observation obs : input) {
+                    System.out.println("****************************");
+                    System.out.println("Saving: varName: "+obs.getVariableName());
+                    System.out.println("Saving: value: "+obs.getValue());
+                    System.out.println("Saving: studyId: "+obs.getStudyId());
+                    System.out.println("Saving: unitDBId: "+obs.getUnitDbId());
+                    System.out.println("Saving: varDbId: "+obs.getVariableDbId());
+
+                    dataHelper.setTraitObservations(fieldbookStudyDbId, obs);
+                }
+
+                // If we haven't thrown an error by now, we are good.
+                DataHelper.db.setTransactionSuccessful();
+                return null;
+            }
+        }, new Function<Integer, Void>() {
+            @Override
+            public Void apply(Integer input) {
+                System.out.println("Stopped:");
+                return null;
+            }
+        });
     }
 
     private AlertDialog showSortDialog(final int position) {
