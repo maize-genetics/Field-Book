@@ -3,6 +3,7 @@ package com.fieldbook.tracker.adapters;
 import androidx.appcompat.app.AlertDialog;
 import androidx.arch.core.util.Function;
 
+import android.app.Activity;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.SharedPreferences;
@@ -17,7 +18,9 @@ import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.BaseAdapter;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.PopupMenu;
+import android.widget.ProgressBar;
 import android.widget.RadioButton;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -64,6 +67,9 @@ public class FieldAdapter extends BaseAdapter {
     private String selectedPrimary;
     private String selectedSecondary;
     private String selectedTertiary;
+
+    AlertDialog.Builder builder;
+    AlertDialog progressDialog;
 
     public FieldAdapter(Context context, ArrayList<FieldObject> list) {
         this.context = context;
@@ -240,26 +246,36 @@ public class FieldAdapter extends BaseAdapter {
         };
     }
 
-    private DialogInterface.OnClickListener makeConfirmSyncListener(final int position) {
+    private DialogInterface.OnClickListener makeConfirmSyncListener(final int position,ProgressBar progressBar) {
         return new DialogInterface.OnClickListener() {
             // Do it when clicking Yes or No
             @Override
             public void onClick(DialogInterface dialog, int which) {
+                progressBar.setVisibility(View.VISIBLE);
+
+                ((Activity) context).runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        syncObservations(getItem(position));
+                    }
+                });
+
+
                 dialog.dismiss();
 
-                System.out.println("Clicked sync");
-                System.out.println("ExpId: "+getItem(position).getExp_id());
-                System.out.println("Name: "+getItem(position).getExp_name());
-                System.out.println("Alias: "+getItem(position).getExp_alias());
-                System.out.println("source: "+getItem(position).getExp_source());
-                System.out.println("primary ID: "+getItem(position).getPrimary_id());
-                System.out.println("secondary ID: "+getItem(position).getSecondary_id());
-                System.out.println("unique ID: "+getItem(position).getUnique_id());
-
-                //TODO uncomment to allow for it to start syncing observations.
+//                System.out.println("Clicked sync");
+//                System.out.println("ExpId: "+getItem(position).getExp_id());
+//                System.out.println("Name: "+getItem(position).getExp_name());
+//                System.out.println("Alias: "+getItem(position).getExp_alias());
+//                System.out.println("source: "+getItem(position).getExp_source());
+//                System.out.println("primary ID: "+getItem(position).getPrimary_id());
+//                System.out.println("secondary ID: "+getItem(position).getSecondary_id());
+//                System.out.println("unique ID: "+getItem(position).getUnique_id());
+//
+//
+//                //TODO uncomment to allow for it to start syncing observations.
 //                syncObservations(getItem(position));
 
-                getItem(position).getExp_id();
 
                 FieldEditorActivity.loadData();
                 CollectActivity.reloadData = true;
@@ -278,9 +294,13 @@ public class FieldAdapter extends BaseAdapter {
         toast.show();
 
 
+
         BrAPIService brAPIService = BrAPIServiceFactory.getBrAPIService(this.context);
 
         List<String> observationIds = new ArrayList<String>();
+
+//        findViewById(R.id.loadingPanel).setVisibility(View.VISIBLE);
+//        progressDialog = getDialogProgressBar().create();
 
         //Trying to get the traits as well:
         brAPIService.getTraits(brapiStudyDbId, new Function<BrapiStudyDetails, Void>() {
@@ -291,8 +311,10 @@ public class FieldAdapter extends BaseAdapter {
                     System.out.println("ObsIds: "+obj.getExternalDbId());
                     observationIds.add(obj.getExternalDbId());
                 }
-
+//                progressDialog.show();
                 getObservations(brAPIService, brapiStudyDbId ,fieldBookStudyDbId,observationIds);
+//                progressDialog.dismiss();
+//                findViewById(R.id.loadingPanel).setVisibility(View.GONE);
 
                 return null;
             }
@@ -332,7 +354,7 @@ public class FieldAdapter extends BaseAdapter {
                 }
 
                 // If we haven't thrown an error by now, we are good.
-                DataHelper.db.setTransactionSuccessful();
+//                DataHelper.db.setTransactionSuccessful();
                 return null;
             }
         }, new Function<Integer, Void>() {
@@ -443,6 +465,23 @@ public class FieldAdapter extends BaseAdapter {
         return alert;
     }
 
+    public AlertDialog.Builder getDialogProgressBar() {
+
+        if (builder == null) {
+            builder = new AlertDialog.Builder(context);
+
+            builder.setTitle("Loading...");
+
+            final ProgressBar progressBar = new ProgressBar(context);
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT);
+            progressBar.setLayoutParams(lp);
+            builder.setView(progressBar);
+        }
+        return builder;
+    }
+
     private void createSortOptionSelectedListener(int spinnerId, AlertDialog alert, ArrayAdapter<String> sortOptions, int spinnerType, String[] selectedVals) {
         Spinner spinner = alert.findViewById(spinnerId);
         spinner.setAdapter(sortOptions);
@@ -492,15 +531,22 @@ public class FieldAdapter extends BaseAdapter {
     private AlertDialog createSyncItemAlertDialog(final int position) {
         AlertDialog.Builder builder = new AlertDialog.Builder(context, R.style.AppAlertDialog);
 
+        final ProgressBar progressBar = new ProgressBar(context);
+        progressBar.setVisibility(View.GONE);
+        builder.setView(progressBar);
+
+
         builder.setTitle("Sync Observations");
         builder.setMessage("Are you sure you want to update observations for this Field?");
-        builder.setPositiveButton(context.getString(R.string.dialog_yes), makeConfirmSyncListener(position));
+        builder.setPositiveButton(context.getString(R.string.dialog_yes), makeConfirmSyncListener(position,progressBar));
         builder.setNegativeButton(context.getString(R.string.dialog_no), new DialogInterface.OnClickListener() {
             public void onClick(DialogInterface dialog, int which) {
                 dialog.dismiss();
             }
 
         });
+
+
 
         AlertDialog alert = builder.create();
         return alert;
