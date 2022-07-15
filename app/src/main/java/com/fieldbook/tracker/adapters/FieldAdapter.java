@@ -26,6 +26,7 @@ import android.widget.Spinner;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import com.fieldbook.tracker.activities.BrapiSyncObsDialog;
 import com.fieldbook.tracker.activities.ConfigActivity;
 import com.fieldbook.tracker.activities.CollectActivity;
 import com.fieldbook.tracker.R;
@@ -217,9 +218,12 @@ public class FieldAdapter extends BaseAdapter {
                 }
                 else if (item.getItemId() == R.id.syncObs) {
                     //TODO call the observation download code
-                    AlertDialog alert = createSyncItemAlertDialog(position);
+//                    AlertDialog alert = createSyncItemAlertDialog(position);
+//                    alert.show();
+//                    DialogUtils.styleDialogs(alert);
+                    BrapiSyncObsDialog alert = new BrapiSyncObsDialog(context);
+                    alert.setFieldObject(getItem(position));
                     alert.show();
-                    DialogUtils.styleDialogs(alert);
                 }
 
                 return false;
