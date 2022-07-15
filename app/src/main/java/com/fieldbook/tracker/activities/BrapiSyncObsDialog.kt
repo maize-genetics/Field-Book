@@ -18,12 +18,14 @@ import com.fieldbook.tracker.brapi.model.Observation
 import com.fieldbook.tracker.brapi.service.BrAPIService
 import com.fieldbook.tracker.brapi.service.BrAPIServiceFactory
 import com.fieldbook.tracker.brapi.service.BrapiPaginationManager
+import com.fieldbook.tracker.database.DataHelper
 import com.fieldbook.tracker.objects.FieldObject
 import com.fieldbook.tracker.objects.TraitObject
 import com.fieldbook.tracker.preferences.GeneralKeys
 
-data class StudyObservations(val traitList: MutableList<TraitObject> = mutableListOf(), val observationList: MutableList<Observation> = mutableListOf()) {
+data class StudyObservations(var fieldBookStudyDbId:Int=0, val traitList: MutableList<TraitObject> = mutableListOf(), val observationList: MutableList<Observation> = mutableListOf()) {
     fun merge(newStudy: StudyObservations) {
+        fieldBookStudyDbId = newStudy.fieldBookStudyDbId
         traitList.addAll(newStudy.traitList)
         observationList.addAll(newStudy.observationList)
     }
@@ -111,7 +113,7 @@ class BrapiSyncObsDialog(context: Context) : Dialog(context) ,android.view.View.
                 brAPIService!!.getObservations(brapiStudyDbId, observationIds, paginationManager,
                     { obsInput ->
                         ((context as ContextWrapper).baseContext as Activity).runOnUiThread {
-                        val currentStudy = StudyObservations(mutableListOf(), obsInput)
+                        val currentStudy = StudyObservations(fieldBookStudyDbId,mutableListOf(), obsInput)
                         studyObservations.merge(currentStudy)
                         //                study.setObservations(input)
                         //                BrapiStudyDetails.merge(studyDetails, study)
@@ -153,6 +155,8 @@ class BrapiSyncObsDialog(context: Context) : Dialog(context) ,android.view.View.
 
     fun saveObservations() {
         println(studyObservations.observationList.size)
+        println(studyObservations.fieldBookStudyDbId)
+        val dataHelper = DataHelper(context)
         for(obs in studyObservations.observationList) {
             println("****************************")
             println("Saving: varName: " + obs.variableName)
@@ -160,6 +164,7 @@ class BrapiSyncObsDialog(context: Context) : Dialog(context) ,android.view.View.
             println("Saving: studyId: " + obs.studyId)
             println("Saving: unitDBId: " + obs.unitDbId)
             println("Saving: varDbId: " + obs.variableDbId)
+            dataHelper.setTraitObservations(studyObservations.fieldBookStudyDbId, obs)
         }
     }
 
