@@ -256,25 +256,68 @@ class ObservationDao {
 
         } ?: -1
 
+        var counter = 0
         fun insertObservation(expId:Int, model: BrapiObservation): Int = withDatabase { db ->
+            //         * @param exp_id the field identifier
+            //         * @param plotId the unique name of the currently selected field
+            //         * @param parent the variable name of the observation
+//            val obs = getObservation("$expId", model.unitDbId,model.variableName)
+//            println("**************************")
+//            println("FAIL Season: ${obs?.season}")
+//            println("FAIL studyId: ${obs?.studyId}")
+//            println("FAIL Value: ${obs?.value}")
+//            println("FAIL unitId: ${obs?.unitDbId}")
+//            println("FAIL VariableDbId: ${obs?.variableDbId}")
+//            println("FAIL DbId: ${obs?.dbId}")
+//            println("FAIL FieldbookDbId: ${obs?.fieldbookDbId}")
+//            println("FAIL VariableName: ${obs?.variableName}")
+//            println("**************************")
 
-            db.insert(Observation.tableName, null, contentValuesOf(
-                "observation_variable_name" to model.variableName,
+            //private String collector;
+            //    private String season;
+            //    private String studyId;
+            //    private String value;private OffsetDateTime timestamp;
+            //    private String unitDbId;
+            //    private String variableDbId;
+            //    private String dbId;
+            //    private OffsetDateTime lastSyncedTime;
+            //    private String fieldbookDbId;
+            //    private String variableName;
+
+            if(getObservation("$expId", model.unitDbId,model.variableName)?.dbId != null)  {
+
+//                println("**************************")
+//                println("FAIL Value: ${obs?.value}")
+//                println("FAIL VariableDbId: ${obs?.variableDbId}")
+//                println("FAIL VariableName: ${obs?.variableName}")
+//                println("FAIL UnitDbId: ${obs?.unitDbId}")
+//                println("**************************")
+
+                println("DbId: ${getObservation("$expId", model.unitDbId,model.variableName)?.dbId}")
+                println("Count: ${counter++}")
+                -1
+            }
+            else {
+                val varRowId =  db.insert(Observation.tableName, null, contentValuesOf(
+                    "observation_variable_name" to model.variableName,
 //                "observation_variable_field_book_format" to model.observation_variable_field_book_format,
-                "observation_variable_field_book_format" to null,
-                "value" to model.value,
-                "observation_time_stamp" to model.timestamp,
-                "collector" to model.collector,
+                    "observation_variable_field_book_format" to null,
+                    "value" to model.value,
+                    "observation_time_stamp" to model.timestamp,
+                    "collector" to model.collector,
 //                "geoCoordinates" to model.geo_coordinates,
-                "geoCoordinates" to null,
-                "last_synced_time" to model.lastSyncedTime,
+                    "geoCoordinates" to null,
+                    "last_synced_time" to model.lastSyncedTime,
 //                "additional_info" to model.additional_info,
-                "additional_info" to null,
+                    "additional_info" to null,
 //                Study.FK to model.studyId,
-                Study.FK to expId,
-                ObservationUnit.FK to model.unitDbId,
-                ObservationVariable.FK to model.variableDbId
-            )).toInt()
+                    "observation_db_id" to model.dbId,
+                    Study.FK to expId,
+                    ObservationUnit.FK to model.unitDbId,
+                    ObservationVariable.FK to model.variableDbId
+                )).toInt()
+                varRowId
+            }
 
         } ?: -1
 

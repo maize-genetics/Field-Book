@@ -6,8 +6,7 @@
         android:title="@string/fields_sort_update" />
     <item
         android:id="@+id/syncObs"
-        android:title="Sync Observations"
-        />
+        android:title="@string/brapi_obs_sync_menu_name" />
     <item
         android:id="@+id/delete"
         android:title="@string/fields_delete" />

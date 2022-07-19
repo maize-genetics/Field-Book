@@ -39,11 +39,12 @@ class BrapiSyncObsDialog(context: Context) : Dialog(context) ,android.view.View.
 
     lateinit var paginationManager: BrapiPaginationManager
 
-    lateinit var selectedField :FieldObject
-    lateinit var fieldNameLbl : TextView
+    lateinit var selectedField: FieldObject
+    lateinit var fieldNameLbl: TextView
+
     // Creates a new thread to do importing
     private val importRunnable =
-        Runnable { ImportRunnableTask(context).execute(0) }
+        Runnable { ImportRunnableTask(context,studyObservations).execute(0) }
 
 
 //    constructor(context: Context) : this(context) { {
@@ -55,7 +56,7 @@ class BrapiSyncObsDialog(context: Context) : Dialog(context) ,android.view.View.
 //        context = context
 //    }
 
-    override fun onCreate(savedInstanceState : Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setCanceledOnTouchOutside(false)
         requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -70,9 +71,12 @@ class BrapiSyncObsDialog(context: Context) : Dialog(context) ,android.view.View.
         val cancelBtn = findViewById<Button>(R.id.brapi_cancel_btn)
         cancelBtn.setOnClickListener(this)
     }
-    fun setFieldObject(fieldObject: FieldObject) { this.selectedField = fieldObject}
 
-    override fun onStart(){
+    fun setFieldObject(fieldObject: FieldObject) {
+        this.selectedField = fieldObject
+    }
+
+    override fun onStart() {
         // Set our OK button to be disabled until we are finished loading
         saveBtn!!.visibility = View.GONE
 
@@ -93,7 +97,7 @@ class BrapiSyncObsDialog(context: Context) : Dialog(context) ,android.view.View.
         dismiss()
     }
 
-    private fun loadObservations(study:FieldObject) {
+    private fun loadObservations(study: FieldObject) {
         val brapiStudyDbId = study.exp_alias
         val fieldBookStudyDbId = study.exp_id
         val brAPIService = BrAPIServiceFactory.getBrAPIService(this.context)
@@ -109,27 +113,31 @@ class BrapiSyncObsDialog(context: Context) : Dialog(context) ,android.view.View.
                     println("ObsIds: " + obj.externalDbId)
                     observationIds.add(obj.externalDbId)
                 }
+                val traitStudy =
+                    StudyObservations(fieldBookStudyDbId, input.traits, mutableListOf())
+                studyObservations.merge(traitStudy)
 
                 brAPIService!!.getObservations(brapiStudyDbId, observationIds, paginationManager,
                     { obsInput ->
                         ((context as ContextWrapper).baseContext as Activity).runOnUiThread {
-                        val currentStudy = StudyObservations(fieldBookStudyDbId,mutableListOf(), obsInput)
-                        studyObservations.merge(currentStudy)
-                        //                study.setObservations(input)
-                        //                BrapiStudyDetails.merge(studyDetails, study)
-                        //                println("StudyId: " + study.getStudyDbId())
-                        //                println("StudyName: " + study.getStudyName())
+                            val currentStudy =
+                                StudyObservations(fieldBookStudyDbId, mutableListOf(), obsInput)
+                            studyObservations.merge(currentStudy)
+                            //                study.setObservations(input)
+                            //                BrapiStudyDetails.merge(studyDetails, study)
+                            //                println("StudyId: " + study.getStudyDbId())
+                            //                println("StudyName: " + study.getStudyName())
 //                        for (obs in input) {
-                        for (obs in studyObservations.observationList) {
-                            println("***************************")
-                            println("StudyId: " + obs.studyId)
-                            println("ObsId: " + obs.dbId)
-                            println("UnitDbId: " + obs.unitDbId)
-                            println("VariableDbId: " + obs.variableDbId)
-                            println("VariableName: " + obs.variableName)
-                            println("Value: " + obs.value)
-                        }
-                        println("Done pulling observations.")
+                            for (obs in studyObservations.observationList) {
+                                println("***************************")
+                                println("StudyId: " + obs.studyId)
+                                println("ObsId: " + obs.dbId)
+                                println("UnitDbId: " + obs.unitDbId)
+                                println("VariableDbId: " + obs.variableDbId)
+                                println("VariableName: " + obs.variableName)
+                                println("Value: " + obs.value)
+                            }
+                            println("Done pulling observations.")
 
 
                             makeSaveBtnVisible()
@@ -146,65 +154,91 @@ class BrapiSyncObsDialog(context: Context) : Dialog(context) ,android.view.View.
 //        println("obsIds Size:" + observationIds.size)
 
 
-
     }
+
     fun makeSaveBtnVisible() {
+        //populate the description fields
+        (findViewById<View>(R.id.numberTraitsValue) as TextView).text =
+            "${studyObservations.traitList.size}"
+        (findViewById<View>(R.id.numberObsValue) as TextView).text =
+            "${studyObservations.observationList.size}"
+
         findViewById<View>(R.id.loadingPanel).visibility = View.GONE
         saveBtn!!.visibility = View.VISIBLE
     }
 
     fun saveObservations() {
-        println(studyObservations.observationList.size)
-        println(studyObservations.fieldBookStudyDbId)
+        println("numObs: ${studyObservations.observationList.size}")
+        println("dbId: ${studyObservations.fieldBookStudyDbId}")
         val dataHelper = DataHelper(context)
-        for(obs in studyObservations.observationList) {
-            println("****************************")
-            println("Saving: varName: " + obs.variableName)
-            println("Saving: value: " + obs.value)
-            println("Saving: studyId: " + obs.studyId)
-            println("Saving: unitDBId: " + obs.unitDbId)
-            println("Saving: varDbId: " + obs.variableDbId)
+
+        //Sync the traits first
+        for (trait in studyObservations.traitList) {
+            dataHelper.insertTraits(trait)
+        }
+
+        //Sorting here to only save the most recently taken observation if it is not already in the DB
+        val observationList = studyObservations.observationList.sortedByDescending { it.timestamp }
+
+        //Then sync the observations
+        for (obs in observationList) {
+//            println("****************************")
+//            println("Saving: varName: " + obs.variableName)
+//            println("Saving: value: " + obs.value)
+//            println("Saving: studyId: " + obs.studyId)
+//            println("Saving: unitDBId: " + obs.unitDbId)
+//            println("Saving: varDbId: " + obs.variableDbId)
             dataHelper.setTraitObservations(studyObservations.fieldBookStudyDbId, obs)
         }
     }
 
 }
-
-// Mimics the class used in the csv field importer to run the saving
+    // Mimics the class used in the csv field importer to run the saving
 // task in a different thread from the UI thread so the app doesn't freeze up.
-internal class ImportRunnableTask(context: Context) : AsyncTask<Int, Int, Int>() {
+    internal class ImportRunnableTask(val context: Context, val studyObservations: StudyObservations) : AsyncTask<Int, Int, Int>() {
 
-    var dialog: ProgressDialog? = null
-    val context = context
-    var brapiControllerResponse: BrapiControllerResponse? = null
-    var fail = false
+        var dialog: ProgressDialog? = null
+        var brapiControllerResponse: BrapiControllerResponse? = null
+        var fail = false
 
-    override fun onPreExecute() {
-        super.onPreExecute()
-        dialog = ProgressDialog(context)
-        dialog!!.isIndeterminate = true
-        dialog!!.setCancelable(false)
-        dialog!!.setMessage(Html.fromHtml(context.resources.getString(R.string.import_dialog_importing)))
-        dialog!!.show()
+        override fun onPreExecute() {
+            super.onPreExecute()
+            dialog = ProgressDialog(context)
+            dialog!!.isIndeterminate = true
+            dialog!!.setCancelable(false)
+            dialog!!.setMessage(Html.fromHtml(context.resources.getString(R.string.import_dialog_importing)))
+            dialog!!.show()
+        }
+
+        override fun doInBackground(vararg params: Int?): Int? {
+            println("numObs: ${studyObservations.observationList.size}")
+            println("dbId: ${studyObservations.fieldBookStudyDbId}")
+            val dataHelper = DataHelper(context)
+
+            //Sync the traits first
+            for (trait in studyObservations.traitList) {
+                dataHelper.insertTraits(trait)
+            }
+
+            //Sorting here to only save the most recently taken observation if it is not already in the DB
+            val observationList =
+                studyObservations.observationList.sortedByDescending { it.timestamp }
+
+            //Then sync the observations
+            for (obs in observationList) {
+//            println("****************************")
+//            println("Saving: varName: " + obs.variableName)
+//            println("Saving: value: " + obs.value)
+//            println("Saving: studyId: " + obs.studyId)
+//            println("Saving: unitDBId: " + obs.unitDbId)
+//            println("Saving: varDbId: " + obs.variableDbId)
+                dataHelper.setTraitObservations(studyObservations.fieldBookStudyDbId, obs)
+            }
+            return 0
+        }
+
+
+        override fun onPostExecute(result: Int) {
+            if (dialog!!.isShowing) dialog!!.dismiss()
+        }
     }
-
-    override fun doInBackground(vararg params: Int?): Int? {
-//        try {
-//            brapiControllerResponse = brAPIService.saveStudyDetails(
-//                studyDetails,
-//                selectedObservationLevel,
-//                selectedPrimary,
-//                selectedSecondary
-//            )
-//        } catch (e: Exception) {
-//            e.printStackTrace()
-//            fail = true
-//        }
-        return 0
-    }
-
-
-    override fun onPostExecute(result: Int) {
-
-    }
-}
