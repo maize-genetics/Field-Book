@@ -7,11 +7,13 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.os.AsyncTask
 import android.os.Bundle
+import android.os.Handler
 import android.text.Html
 import android.view.View
 import android.view.Window
 import android.widget.Button
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import com.fieldbook.tracker.R
 import com.fieldbook.tracker.brapi.BrapiControllerResponse
 import com.fieldbook.tracker.brapi.model.Observation
@@ -22,6 +24,7 @@ import com.fieldbook.tracker.database.DataHelper
 import com.fieldbook.tracker.objects.FieldObject
 import com.fieldbook.tracker.objects.TraitObject
 import com.fieldbook.tracker.preferences.GeneralKeys
+import com.fieldbook.tracker.utilities.DialogUtils
 
 data class StudyObservations(var fieldBookStudyDbId:Int=0, val traitList: MutableList<TraitObject> = mutableListOf(), val observationList: MutableList<Observation> = mutableListOf()) {
     fun merge(newStudy: StudyObservations) {
@@ -168,6 +171,15 @@ class BrapiSyncObsDialog(context: Context) : Dialog(context) ,android.view.View.
     }
 
     fun saveObservations() {
+        // Dismiss this dialog
+        dismiss()
+
+        // Run saving task in the background so we can showing progress dialog
+        val mHandler = Handler()
+        mHandler.post(importRunnable)
+    }
+
+    fun saveObservations2() {
         println("numObs: ${studyObservations.observationList.size}")
         println("dbId: ${studyObservations.fieldBookStudyDbId}")
         val dataHelper = DataHelper(context)
@@ -200,6 +212,7 @@ class BrapiSyncObsDialog(context: Context) : Dialog(context) ,android.view.View.
         var dialog: ProgressDialog? = null
         var brapiControllerResponse: BrapiControllerResponse? = null
         var fail = false
+        var failMessage = ""
 
         override fun onPreExecute() {
             super.onPreExecute()
@@ -211,34 +224,62 @@ class BrapiSyncObsDialog(context: Context) : Dialog(context) ,android.view.View.
         }
 
         override fun doInBackground(vararg params: Int?): Int? {
+
             println("numObs: ${studyObservations.observationList.size}")
             println("dbId: ${studyObservations.fieldBookStudyDbId}")
             val dataHelper = DataHelper(context)
 
-            //Sync the traits first
-            for (trait in studyObservations.traitList) {
-                dataHelper.insertTraits(trait)
+            try {
+                //Sync the traits first
+                for (trait in studyObservations.traitList) {
+                    dataHelper.insertTraits(trait)
+                }
+            }
+            catch (exc: Exception) {
+                fail = true
+                failMessage = exc?.message?:"ERROR"
+                return null
             }
 
-            //Sorting here to only save the most recently taken observation if it is not already in the DB
-            val observationList =
-                studyObservations.observationList.sortedByDescending { it.timestamp }
+            try {
+                //Sorting here to only save the most recently taken observation if it is not already in the DB
+                val observationList =
+                    studyObservations.observationList.sortedByDescending { it.timestamp }
 
-            //Then sync the observations
-            for (obs in observationList) {
+                //Then sync the observations
+                for (obs in observationList) {
 //            println("****************************")
 //            println("Saving: varName: " + obs.variableName)
 //            println("Saving: value: " + obs.value)
 //            println("Saving: studyId: " + obs.studyId)
 //            println("Saving: unitDBId: " + obs.unitDbId)
 //            println("Saving: varDbId: " + obs.variableDbId)
-                dataHelper.setTraitObservations(studyObservations.fieldBookStudyDbId, obs)
+                    dataHelper.setTraitObservations(studyObservations.fieldBookStudyDbId, obs)
+                }
+                return 0
             }
-            return 0
+            catch (exc: Exception) {
+                fail = true
+                failMessage = exc?.message?:"ERROR"
+                return null
+            }
+
         }
 
 
         override fun onPostExecute(result: Int) {
             if (dialog!!.isShowing) dialog!!.dismiss()
+            if(fail) {
+                val alertDialogBuilder = AlertDialog.Builder(context)
+                alertDialogBuilder.setTitle(R.string.dialog_save_error_title)
+                    .setPositiveButton(R.string.dialog_ok) { dialogInterface, i ->
+                        // Finish our BrAPI import activity
+                        (context as Activity).finish()
+                    }
+                alertDialogBuilder.setMessage(failMessage)
+                val alertDialog = alertDialogBuilder.create()
+                alertDialog.show()
+                DialogUtils.styleDialogs(alertDialog)
+            }
         }
     }
